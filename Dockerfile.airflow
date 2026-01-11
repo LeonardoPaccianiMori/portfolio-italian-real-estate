@@ -1,0 +1,56 @@
+# Italian Real Estate Pipeline - Airflow Container
+# Airflow scheduler and webserver for DAG orchestration
+#
+# Author: Leonardo Pacciani-Mori
+# License: MIT
+
+# =============================================================================
+# Base Image: Official Apache Airflow with Python 3.11
+# =============================================================================
+FROM apache/airflow:2.8.0-python3.11
+
+# =============================================================================
+# System Dependencies (as root)
+# =============================================================================
+USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # PostgreSQL client libraries for psycopg2
+    libpq-dev \
+    # Build tools for compiling Python packages
+    gcc \
+    g++ \
+    # Chromium for Selenium-based scraping
+    chromium \
+    chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
+# Python Dependencies & Project Code (as airflow user)
+# =============================================================================
+USER airflow
+WORKDIR /opt/airflow/app
+
+# Copy full project for installation/runtime
+COPY --chown=airflow:root pyproject.toml README.md ./
+COPY --chown=airflow:root src/ src/
+COPY --chown=airflow:root scripts/ scripts/
+COPY --chown=airflow:root dags/ dags/
+
+# Install the complete project (all dependencies)
+RUN pip install --no-cache-dir .
+
+# =============================================================================
+# DAG Files
+# =============================================================================
+# DAGs are mounted as a volume in docker-compose.yml for live updates
+# This COPY is for standalone builds
+COPY --chown=airflow:root dags/ /opt/airflow/dags/
+
+# =============================================================================
+# Environment Configuration
+# =============================================================================
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/opt/airflow/app/src
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/lib/chromium/chromedriver

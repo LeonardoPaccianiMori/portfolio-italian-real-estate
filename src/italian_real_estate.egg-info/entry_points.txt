@@ -1,0 +1,7 @@
+[console_scripts]
+italian-real-estate = scripts.pipeline_tui:main
+italian-real-estate-etl = scripts.run_etl:main
+italian-real-estate-migrate = scripts.run_migration:main
+italian-real-estate-scrape = scripts.run_scraping:main
+italian-real-estate-synthetic = scripts.generate_synthetic_data:main
+italian-real-estate-train = scripts.train_model:main

@@ -1,0 +1,41 @@
+# Italian Real Estate Pipeline - GPU Override Configuration
+#
+# This file extends docker-compose.yml to enable GPU support for TensorFlow.
+# Use this for accelerated synthetic data generation.
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Requirements:
+#   - NVIDIA GPU with CUDA support
+#   - NVIDIA Container Toolkit (nvidia-docker2 or nvidia-container-toolkit)
+#   - Docker 19.03+ with GPU support
+#
+# To install nvidia-container-toolkit on Ubuntu:
+#   distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+#   curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+#   curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | \
+#     sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+#   sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+#   sudo systemctl restart docker
+#
+# Author: Leonardo Pacciani-Mori
+# License: MIT
+
+services:
+  app:
+    # Enable GPU access for the application container
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      # Make all GPUs visible to the container
+      - NVIDIA_VISIBLE_DEVICES=all
+      # Enable TensorFlow GPU memory growth to prevent OOM errors
+      - TF_FORCE_GPU_ALLOW_GROWTH=true
+      # Reduce TensorFlow logging verbosity
+      - TF_CPP_MIN_LOG_LEVEL=2

@@ -1,0 +1,428 @@
+Metadata-Version: 2.4
+Name: italian-real-estate
+Version: 1.0.0
+Summary: Italian real estate data pipeline: web scraping, ETL, migration, synthetic data generation, and ML modeling
+Author-email: Leonardo Pacciani-Mori <leonardo@leonardo.pm>
+License-Expression: MIT
+Project-URL: Homepage, https://leonardo.pm/projects/1-italian-real-estate/
+Project-URL: Repository, https://github.com/LeonardoPaccianiMori/projects-portfolio
+Keywords: real-estate,data-pipeline,etl,machine-learning,web-scraping
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: aiohttp>=3.8.0
+Requires-Dist: beautifulsoup4>=4.11.0
+Requires-Dist: selenium>=4.0.0
+Requires-Dist: lxml>=4.9.0
+Requires-Dist: pymongo>=4.0.0
+Requires-Dist: psycopg2-binary>=2.9.0
+Requires-Dist: sqlalchemy<2.0,>=1.4
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pyarrow>=14.0.0
+Requires-Dist: scikit-learn>=1.2.0
+Requires-Dist: tensorflow>=2.12.0
+Requires-Dist: matplotlib>=3.7.0
+Requires-Dist: lingua-language-detector>=2.0.0
+Requires-Dist: requests==2.31.0
+Requires-Dist: python-dateutil>=2.8.0
+Requires-Dist: tqdm>=4.65.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: apache-airflow==2.8.0
+Requires-Dist: packaging<24,>=23
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: isort>=5.12.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Dynamic: license-file
+
+# Italian Real Estate Data Pipeline
+
+A complete data pipeline for collecting, processing, and analyzing Italian real estate listings from [listing.website](https://www.listing.website). The pipeline includes web scraping, ETL processing, data warehousing, synthetic data generation, and machine learning for rent prediction.
+
+> **Important notice:** The scraping layer intentionally contains redacted selectors/placeholders (see `src/italian_real_estate/scraping/`), so it cannot be used for live scraping as-is. This project is shared for educational/reference purposes, not for production scraping.
+
+**[Full project write-up](https://leonardo.pm/projects/italian-real-estate/)**
+
+## Pipeline Overview
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│   SCRAPE    │───▶│     ETL     │───▶│   MIGRATE   │───▶│  DATA EXPORT │───▶│    TRAIN    │
+│             │    │             │    │             │    │ (real/synth)│    │             │
+│ listing_website │    │  MongoDB    │    │  MongoDB    │    │ PostgreSQL  │    │ Parquet/ML  │
+│     .it     │    │  Datalake   │    │  Warehouse  │    │     ───▶    │    │ Model +     │
+│     ───▶    │    │    ───▶     │    │    ───▶     │    │  Parquet    │    │ Dashboard   │
+│  MongoDB    │    │  MongoDB    │    │ PostgreSQL  │    │             │    │             │
+│  Datalake   │    │  Warehouse  │    │ Star Schema │    │             │    │             │
+└─────────────┘    └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘
+```
+
+### Pipeline Stages
+
+1. **SCRAPE** - Web scraping from listing.website to MongoDB Datalake
+2. **ETL** - Extract, transform, and load to MongoDB Warehouse
+3. **MIGRATE** - Migrate to PostgreSQL with star schema + Italian→English translation
+4. **DATA EXPORT** - Export real or synthetic data to Parquet (synthetic generation happens here)
+5. **TRAIN** - Train RandomForest model for rent prediction
+
+## Project Structure
+
+```
+italian-real-estate/
+├── dags/                           # Airflow DAGs
+│   ├── datalake_population_dag.py  # Web scraping DAG
+│   ├── mongodb_etl_dag.py          # ETL DAG
+│   ├── postgres_migration_dag.py   # PostgreSQL migration DAG
+│   └── dag_utils.py                # Shared DAG utilities
+├── scripts/                        # CLI scripts
+│   ├── pipeline_tui.py             # Main orchestrator + database explorer
+│   ├── run_scraping.py             # Scraping CLI
+│   ├── run_etl.py                  # ETL CLI
+│   ├── run_migration.py            # Migration CLI
+│   ├── generate_synthetic_data.py  # Synthetic data CLI
+│   └── train_model.py              # ML training CLI
+├── src/italian_real_estate/        # Main package
+│   ├── config/                     # Settings and logging
+│   ├── data/                       # Bundled assets (e.g., provinces.csv)
+│   ├── core/                       # Shared utilities
+│   ├── scraping/                   # Web scraping module
+│   ├── etl/                        # ETL processing
+│   ├── migration/                  # PostgreSQL migration
+│   │   └── translation/            # LibreTranslate integration
+│   ├── synthetic_data/             # KNN-based data generation
+│   ├── ml/                         # Machine learning
+│   └── utils/                      # Progress tracking utilities
+├── data/                           # Output data directory
+└── pyproject.toml                  # Package configuration
+```
+
+## Installation
+
+### Option 1: Docker (Recommended)
+
+The easiest way to run the pipeline is with Docker, which includes all dependencies:
+
+```bash
+# Clone the repository
+git clone https://github.com/LeonardoPaccianiMori/projects-portfolio.git
+cd projects-portfolio/italian-real-estate
+
+# Copy environment template and configure
+cp .env.example .env
+# Edit .env with your settings
+
+# Build and start all services
+docker compose up -d
+
+# Access the interactive TUI
+docker compose exec app python scripts/pipeline_tui.py
+
+# View logs
+docker compose logs -f app
+```
+
+For GPU-accelerated synthetic data generation:
+
+```bash
+# With GPU support (requires NVIDIA Container Toolkit)
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+Services included:
+- **app**: Main application container with TensorFlow GPU support
+- **mongodb**: Document database for datalake and warehouse
+- **postgres**: PostgreSQL star schema warehouse
+- **redis**: Message broker for Airflow
+- **airflow-webserver**: Airflow UI (port 8080)
+- **airflow-scheduler**: DAG executor
+
+### Option 2: Local Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/LeonardoPaccianiMori/projects-portfolio.git
+cd projects-portfolio/italian-real-estate
+
+# Install the package
+pip install -e .
+
+# Or install with development dependencies
+pip install -e ".[dev]"
+```
+
+### Requirements
+
+**For Docker deployment:**
+- Docker 20.10+
+- Docker Compose 2.0+
+- NVIDIA Container Toolkit (for GPU support)
+
+**For local installation:**
+- Python 3.9+
+- MongoDB 4.0+
+- PostgreSQL 12+
+- LibreTranslate (for translation step)
+- Chrome/Chromium (for Selenium-based scraping)
+- NVIDIA GPU + CUDA 11.8+ (optional, for GPU acceleration)
+
+## Usage
+
+### Pipeline TUI (Recommended)
+
+The main entry point is `pipeline_tui.py` (also exposed as the `italian-real-estate` console script), which provides both an interactive TUI and a CLI:
+
+```bash
+# Launch interactive TUI (menu-based interface)
+python scripts/pipeline_tui.py
+# or, if installed: italian-real-estate
+```
+
+The TUI provides:
+- Arrow-key navigation through pipeline stages
+- Configuration submenus for each stage
+- Pipeline status display
+- Database explorer access
+
+### CLI Mode
+
+For scripting and automation, use command-line arguments:
+
+```bash
+# Show pipeline status
+italian-real-estate status
+
+# Run all stages interactively (confirm each stage)
+italian-real-estate all
+
+# Run all stages automatically (no confirmations)
+italian-real-estate all -y
+
+# Run specific stage
+italian-real-estate scrape --all-provinces
+italian-real-estate etl --all
+italian-real-estate migrate --all
+italian-real-estate data-export --synthetic
+italian-real-estate data-export --real
+italian-real-estate train
+
+# Run range of stages
+italian-real-estate --from scrape --to migrate
+
+# Run specific stages
+italian-real-estate --stages scrape,etl,migrate,data-export
+```
+
+### Database Explorer
+
+The TUI/CLI includes an interactive database explorer for browsing MongoDB and PostgreSQL:
+
+```bash
+# Launch interactive explorer
+python scripts/pipeline_tui.py db
+```
+
+In the interactive explorer:
+```
+db> use mongo-datalake
+db[mongo-datalake]> collections
+db[mongo-datalake]> sample sale 5
+db[mongo-datalake]> use postgres
+db[postgres]> tables
+db[postgres]> query SELECT * FROM dim_location LIMIT 5
+db[postgres]> exit
+```
+
+Available commands:
+- `use <database>` - Connect to database (mongo-datalake, mongo-warehouse, postgres)
+- `collections` / `tables` - List collections/tables with counts
+- `sample <name> [n]` - Show n sample records (default: 5)
+- `count <name>` - Count records in collection/table
+- `schema <name>` - Show schema/fields
+- `query <SQL>` - Run SQL query (PostgreSQL only)
+- `find <collection> <json>` - Run MongoDB find with JSON filter
+- `stats` - Show database statistics
+- `help` - Show help
+- `exit` - Exit explorer
+
+Non-interactive mode for scripting:
+```bash
+python scripts/pipeline_tui.py db --database postgres --collections
+python scripts/pipeline_tui.py db --database mongo-datalake --sample sale 5
+python scripts/pipeline_tui.py db --database postgres --query "SELECT COUNT(*) FROM fact_listing"
+```
+
+### Individual Stage CLIs
+
+Each stage can also be run independently:
+
+```bash
+# Scraping
+python scripts/run_scraping.py --all-provinces --listing-type sale
+python scripts/run_scraping.py --province Milano --listing-type rent
+python scripts/run_scraping.py --stats
+
+# ETL
+python scripts/run_etl.py --all
+python scripts/run_etl.py --listing-type sale
+python scripts/run_etl.py --stats
+
+# Migration
+python scripts/run_migration.py --all
+python scripts/run_migration.py --all --batch-size 5000 --max-batches 10
+python scripts/run_migration.py --translate-only
+python scripts/run_migration.py --stats
+
+# Synthetic Data Generation
+python scripts/generate_synthetic_data.py
+python scripts/generate_synthetic_data.py --num-rent 80000 --num-sale 850000
+
+# ML Training
+python scripts/train_model.py
+python scripts/train_model.py --input data/synthetic_data.csv --show-plots
+```
+
+### Airflow DAGs
+
+For scheduled execution, use the Airflow DAGs:
+
+```bash
+# Copy DAGs to Airflow
+cp dags/*.py ~/airflow/dags/
+
+# DAGs will appear in Airflow UI:
+# - listing.website_datalake_population_DAG_webscraping
+# - listing.website_datalake_ETL_warehouse_MongoDB_DAG
+# - listing.website_MongoDB_to_PostgreSQL_migration
+```
+
+## Configuration
+
+Configuration is centralized in `src/italian_real_estate/config/settings.py`:
+
+```python
+# MongoDB
+MONGODB_HOST = "127.0.0.1"
+MONGODB_PORT = 27017
+MONGODB_DATALAKE_NAME = "listing_website_datalake"
+MONGODB_WAREHOUSE_NAME = "listing_website_warehouse"
+
+# PostgreSQL
+POSTGRES_HOST = "localhost"
+POSTGRES_PORT = "5432"
+POSTGRES_DATABASE = "listing_website_warehouse"
+
+# Processing
+BATCH_SIZE = 10000
+HTTP_SEMAPHORE_LIMIT = 50
+```
+
+## Data Schema
+
+### PostgreSQL Star Schema
+
+The PostgreSQL warehouse uses a star schema with:
+
+**Fact Table:**
+- `fact_listing` - Main listing facts (price, surface, rooms, etc.)
+
+**Dimension Tables:**
+- `dim_date` - Listing dates
+- `dim_listing_type` - Sale, rent, auction
+- `dim_seller_type` - Agency, private, etc.
+- `dim_category` - Property categories
+- `dim_energy_info` - Energy ratings and heating
+- `dim_type_of_property` - Apartment, villa, etc.
+- `dim_condition` - Property condition
+- `dim_rooms_info` - Room details
+- `dim_building_info` - Building characteristics
+- `dim_location` - Geographic location
+- `dim_mortgage_rate` - Mortgage rates by date
+- `dim_listing_page` - Listing page metadata
+- `dim_features` - Property features
+- `dim_surface_composition` - Surface breakdown
+
+**Bridge Tables:**
+- `listing_features_bridge` - Many-to-many for features
+- `surface_composition_bridge` - Many-to-many for surfaces
+
+## Progress Visualization
+
+The CLI provides Airflow-like progress visualization for parallel jobs:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ SCRAPE Stage - sale listings                                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Progress: ████████████░░░░░░░░ 60% (66/110 provinces)                   │
+│ Active: 8 workers | Completed: 66 | Failed: 0 | Remaining: 44           │
+│ Time: 00:12:34 elapsed | ~00:08:15 remaining                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Province              Status       Records     Time                     │
+│ Milano                ✓ Done       12,453      00:02:15                 │
+│ Roma                  ✓ Done       18,921      00:03:42                 │
+│ Torino                ● Running    8,234...    00:01:23                 │
+│ Napoli                ● Running    6,102...    00:00:58                 │
+│ Firenze               ○ Pending    -           -                        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## GPU Acceleration
+
+The synthetic data generation stage uses TensorFlow for GPU-accelerated KNN interpolation. This enables generating millions of synthetic records efficiently.
+
+### GPU Memory Management
+
+The generator processes data in chunks to prevent GPU out-of-memory errors:
+
+```python
+# Default settings in src/italian_real_estate/config/settings.py
+SYNTHETIC_DATA_CHUNK_SIZE = 5000   # Samples per chunk
+SYNTHETIC_DATA_BATCH_SIZE = 25     # Samples per GPU batch
+```
+
+For GPUs with limited memory (< 8GB), you can further reduce these values:
+
+```bash
+# Environment variable overrides (if supported)
+export SYNTHETIC_DATA_CHUNK_SIZE=2500
+export SYNTHETIC_DATA_BATCH_SIZE=10
+```
+
+### GPU Requirements
+
+- NVIDIA GPU with CUDA 11.8+ support
+- At least 4GB GPU memory (8GB+ recommended)
+- NVIDIA drivers 470.57.02+
+- For Docker: NVIDIA Container Toolkit
+
+### Running Without GPU
+
+The pipeline automatically falls back to CPU if no GPU is detected. CPU processing is slower but fully functional.
+
+## Machine Learning
+
+The ML module trains a RandomForest regressor to predict rent prices based on:
+- Property characteristics (surface, rooms, bathrooms, floor)
+- Location (province, latitude, longitude)
+- Building info (year built, condition, energy class)
+- Features (garage, garden, terrace, etc.)
+
+The trained model is then used to estimate potential rental income for sale/auction listings, enabling investment analysis.
+
+## License
+
+MIT
+
+## Author
+
+Leonardo Pacciani-Mori - [leonardo.pm](https://leonardo.pm)
