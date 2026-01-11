@@ -1,0 +1,114 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "italian-real-estate"
+version = "1.0.0"
+description = "Italian real estate data pipeline: web scraping, ETL, migration, synthetic data generation, and ML modeling"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "Leonardo Pacciani-Mori", email = "leonardo@leonardo.pm"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+keywords = ["real-estate", "data-pipeline", "etl", "machine-learning", "web-scraping"]
+
+dependencies = [
+    # Web scraping
+    "aiohttp>=3.8.0",
+    "beautifulsoup4>=4.11.0",
+    "selenium>=4.0.0",
+    "lxml>=4.9.0",
+
+    # Database connectivity
+    "pymongo>=4.0.0",
+    "psycopg2-binary>=2.9.0",
+    "sqlalchemy>=1.4,<2.0",
+
+    # Data manipulation
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "pyarrow>=14.0.0",
+
+    # Machine learning
+    "scikit-learn>=1.2.0",
+    "tensorflow>=2.12.0",
+
+    # Visualization
+    "matplotlib>=3.7.0",
+
+    # Translation
+    "lingua-language-detector>=2.0.0",
+    "requests==2.31.0",
+
+    # Utilities
+    "python-dateutil>=2.8.0",
+    "tqdm>=4.65.0",
+    "rich>=13.0.0",
+
+    # Airflow (optional, for DAG execution)
+    "apache-airflow==2.8.0",
+    "packaging>=23,<24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+]
+
+[project.scripts]
+italian-real-estate = "scripts.pipeline_tui:main"
+italian-real-estate-scrape = "scripts.run_scraping:main"
+italian-real-estate-etl = "scripts.run_etl:main"
+italian-real-estate-migrate = "scripts.run_migration:main"
+italian-real-estate-synthetic = "scripts.generate_synthetic_data:main"
+italian-real-estate-train = "scripts.train_model:main"
+
+[project.urls]
+Homepage = "https://leonardo.pm/projects/1-italian-real-estate/"
+Repository = "https://github.com/LeonardoPaccianiMori/projects-portfolio"
+
+[tool.setuptools]
+packages = [
+    "italian_real_estate",
+    "italian_real_estate.config",
+    "italian_real_estate.core",
+    "italian_real_estate.scraping",
+    "italian_real_estate.etl",
+    "italian_real_estate.migration",
+    "italian_real_estate.migration.translation",
+    "italian_real_estate.synthetic_data",
+    "italian_real_estate.ml",
+    "italian_real_estate.utils",
+    "italian_real_estate.data",
+    "scripts",
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+scripts = "scripts"
+
+[tool.setuptools.package-data]
+italian_real_estate = ["data/*.csv", "data/*.geojson"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100

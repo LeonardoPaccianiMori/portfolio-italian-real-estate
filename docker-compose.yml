@@ -1,0 +1,377 @@
+# Italian Real Estate Pipeline - Docker Compose Configuration
+#
+# This file orchestrates all services needed to run the complete pipeline:
+# - MongoDB (datalake and warehouse)
+# - PostgreSQL (star schema warehouse)
+# - Redis (Airflow backend)
+# - Airflow (webserver and scheduler)
+# - App (main pipeline application with TUI)
+#
+# Quick Start:
+#   docker-compose up -d
+#   docker-compose exec app python scripts/pipeline_tui.py
+#
+# For GPU support, use:
+#   docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Author: Leonardo Pacciani-Mori
+# License: MIT
+
+services:
+  # ===========================================================================
+  # MongoDB - Document Database for Datalake and ETL Warehouse
+  # ===========================================================================
+  mongodb:
+    image: mongo:7.0
+    container_name: listing_website-mongodb
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER:-}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD:-}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+      - ./docker/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - listing_website-net
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$MONGO_INITDB_ROOT_USERNAME\" ]; then mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping')\"; else mongosh --quiet --eval \"db.adminCommand('ping')\"; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ===========================================================================
+  # PostgreSQL - Relational Database for Star Schema Warehouse
+  # ===========================================================================
+  postgres:
+    image: postgres:16
+    container_name: listing_website-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-listing_website}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-listing_website_warehouse}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql:ro
+    networks:
+      - listing_website-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-listing_website} -d ${POSTGRES_DATABASE:-listing_website_warehouse}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ===========================================================================
+  # Redis - Message Broker for Airflow
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: listing_website-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - listing_website-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Main Application Container
+  # ===========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: listing_website-app
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    environment:
+      # MongoDB connection
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATALAKE_NAME=${MONGODB_DATALAKE_NAME:-listing_website_datalake}
+      - MONGODB_WAREHOUSE_NAME=${MONGODB_WAREHOUSE_NAME:-listing_website_warehouse}
+      - MONGODB_USER=${MONGODB_USER:-}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD:-}
+      - MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE:-admin}
+      # PostgreSQL connection
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-listing_website}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-listing_website_warehouse}
+      # TensorFlow settings
+      - TF_CPP_MIN_LOG_LEVEL=2
+      # Airflow API (used by TUI to trigger/monitor DAGs)
+      - AIRFLOW_API_BASE_URL=${AIRFLOW_API_BASE_URL:-http://airflow-webserver:8080/api/v1}
+      - AIRFLOW_API_USER=${AIRFLOW_API_USER:-admin}
+      - AIRFLOW_API_PASSWORD=${AIRFLOW_API_PASSWORD:-admin}
+      # Scraping (Selenium)
+      - SCRAPING_USE_SELENIUM=${SCRAPING_USE_SELENIUM:-0}
+      - SCRAPING_SELENIUM_HEADLESS=${SCRAPING_SELENIUM_HEADLESS:-true}
+      - SCRAPING_SELENIUM_PROFILE_DIR=${SCRAPING_SELENIUM_PROFILE_DIR-}
+      - SCRAPING_HUMANIZE=${SCRAPING_HUMANIZE:-0}
+      - SCRAPING_HUMANIZE_MIN_WAIT=${SCRAPING_HUMANIZE_MIN_WAIT:-0.5}
+      - SCRAPING_HUMANIZE_MAX_WAIT=${SCRAPING_HUMANIZE_MAX_WAIT:-3.0}
+      - SCRAPING_HUMANIZE_SCROLL_MIN=${SCRAPING_HUMANIZE_SCROLL_MIN:-1}
+      - SCRAPING_HUMANIZE_SCROLL_MAX=${SCRAPING_HUMANIZE_SCROLL_MAX:-5}
+      - SCRAPING_HUMANIZE_SCROLL_WAIT_MIN=${SCRAPING_HUMANIZE_SCROLL_WAIT_MIN:-0.5}
+      - SCRAPING_HUMANIZE_SCROLL_WAIT_MAX=${SCRAPING_HUMANIZE_SCROLL_WAIT_MAX:-1.5}
+      - SCRAPING_POLITE_MODE=${SCRAPING_POLITE_MODE:-0}
+      - SCRAPING_POLITE_MIN_WAIT=${SCRAPING_POLITE_MIN_WAIT:-1.0}
+      - SCRAPING_POLITE_MAX_WAIT=${SCRAPING_POLITE_MAX_WAIT:-5.0}
+      - SCRAPING_POLITE_MAX_RETRIES=${SCRAPING_POLITE_MAX_RETRIES:-5}
+      - SCRAPING_POLITE_BACKOFF_BASE=${SCRAPING_POLITE_BACKOFF_BASE:-2.0}
+      - SCRAPING_POOL_NAME=${SCRAPING_POOL_NAME:-scrape_pool}
+      - SCRAPING_POOL_SLOTS=${SCRAPING_POOL_SLOTS:-1}
+      - SCRAPING_POLITE_MAX_ACTIVE_TASKS=${SCRAPING_POLITE_MAX_ACTIVE_TASKS:-1}
+      - HTTP_SEMAPHORE_LIMIT=${HTTP_SEMAPHORE_LIMIT:-1}
+      - SCRAPING_POLITE_MAX_ACTIVE_TASKS=${SCRAPING_POLITE_MAX_ACTIVE_TASKS:-1}
+      - HTTP_SEMAPHORE_LIMIT=${HTTP_SEMAPHORE_LIMIT:-1}
+    volumes:
+      # Persist output data
+      - ./data:/app/data
+      # Mount source for development (read-only in production)
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./dags:/app/dags:ro
+      - selenium-profile:/opt/selenium-profile
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - listing_website-net
+
+  # ===========================================================================
+  # Airflow Database Initialization (runs once)
+  # ===========================================================================
+  airflow-db-init:
+    image: postgres:16
+    container_name: listing_website-airflow-db-init
+    restart: "no"
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD:-changeme}
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        psql -h postgres -U ${POSTGRES_USER:-listing_website} -d postgres \
+          -v airflow_user="${AIRFLOW_DB_USER:-airflow}" \
+          -v airflow_password="${AIRFLOW_DB_PASSWORD:-airflow}" \
+          -v airflow_db="${AIRFLOW_DB_NAME:-airflow}" <<'SQL'
+        \set ON_ERROR_STOP on
+        SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'airflow_user', :'airflow_password')
+        WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = :'airflow_user')\gexec
+
+        SELECT format('ALTER ROLE %I WITH PASSWORD %L', :'airflow_user', :'airflow_password')
+        WHERE EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = :'airflow_user')\gexec
+
+        SELECT format('CREATE DATABASE %I OWNER %I', :'airflow_db', :'airflow_user')
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'airflow_db')\gexec
+
+        GRANT ALL PRIVILEGES ON DATABASE :"airflow_db" TO :"airflow_user";
+        ALTER DATABASE :"airflow_db" OWNER TO :"airflow_user";
+        SQL
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - listing_website-net
+
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: listing_website-airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init
+        airflow users create \
+          --username ${AIRFLOW_ADMIN_USER:-admin} \
+          --password ${AIRFLOW_ADMIN_PASSWORD:-admin} \
+          --firstname ${AIRFLOW_ADMIN_FIRSTNAME:-Admin} \
+          --lastname ${AIRFLOW_ADMIN_LASTNAME:-User} \
+          --role Admin \
+          --email ${AIRFLOW_ADMIN_EMAIL:-admin@example.com} || true
+        airflow pools set \
+          ${SCRAPING_POOL_NAME:-scrape_pool} \
+          ${SCRAPING_POOL_SLOTS:-1} \
+          "Scraping pool (rate limiting)" || true
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:-}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:-your-secret-key}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - SCRAPING_POOL_NAME=${SCRAPING_POOL_NAME:-scrape_pool}
+      - SCRAPING_POOL_SLOTS=${SCRAPING_POOL_SLOTS:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-db-init:
+        condition: service_completed_successfully
+    networks:
+      - listing_website-net
+
+  # ===========================================================================
+  # Airflow Webserver - UI for DAG Management
+  # ===========================================================================
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: listing_website-airflow-webserver
+    restart: unless-stopped
+    command: webserver
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:-}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:-your-secret-key}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROMEDRIVER_PATH=/usr/bin/chromedriver
+      - SCRAPING_USE_SELENIUM=${SCRAPING_USE_SELENIUM:-0}
+      - SCRAPING_SELENIUM_HEADLESS=${SCRAPING_SELENIUM_HEADLESS:-true}
+      - SCRAPING_SELENIUM_PROFILE_DIR=${SCRAPING_SELENIUM_PROFILE_DIR-}
+      - SCRAPING_HUMANIZE=${SCRAPING_HUMANIZE:-0}
+      - SCRAPING_HUMANIZE_MIN_WAIT=${SCRAPING_HUMANIZE_MIN_WAIT:-0.5}
+      - SCRAPING_HUMANIZE_MAX_WAIT=${SCRAPING_HUMANIZE_MAX_WAIT:-3.0}
+      - SCRAPING_HUMANIZE_SCROLL_MIN=${SCRAPING_HUMANIZE_SCROLL_MIN:-1}
+      - SCRAPING_HUMANIZE_SCROLL_MAX=${SCRAPING_HUMANIZE_SCROLL_MAX:-5}
+      - SCRAPING_HUMANIZE_SCROLL_WAIT_MIN=${SCRAPING_HUMANIZE_SCROLL_WAIT_MIN:-0.5}
+      - SCRAPING_HUMANIZE_SCROLL_WAIT_MAX=${SCRAPING_HUMANIZE_SCROLL_WAIT_MAX:-1.5}
+      - SCRAPING_POLITE_MODE=${SCRAPING_POLITE_MODE:-0}
+      - SCRAPING_POLITE_MIN_WAIT=${SCRAPING_POLITE_MIN_WAIT:-1.0}
+      - SCRAPING_POLITE_MAX_WAIT=${SCRAPING_POLITE_MAX_WAIT:-5.0}
+      - SCRAPING_POLITE_MAX_RETRIES=${SCRAPING_POLITE_MAX_RETRIES:-5}
+      - SCRAPING_POLITE_BACKOFF_BASE=${SCRAPING_POLITE_BACKOFF_BASE:-2.0}
+      - SCRAPING_POOL_NAME=${SCRAPING_POOL_NAME:-scrape_pool}
+      - SCRAPING_POOL_SLOTS=${SCRAPING_POOL_SLOTS:-1}
+      # Pass database config to DAGs
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-listing_website}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-listing_website_warehouse}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+      - selenium-profile:/opt/selenium-profile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - listing_website-net
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ===========================================================================
+  # Airflow Scheduler - Executes DAG Tasks
+  # ===========================================================================
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: listing_website-airflow-scheduler
+    restart: unless-stopped
+    command: scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:-}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:-your-secret-key}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROMEDRIVER_PATH=/usr/bin/chromedriver
+      - SCRAPING_USE_SELENIUM=${SCRAPING_USE_SELENIUM:-0}
+      - SCRAPING_SELENIUM_HEADLESS=${SCRAPING_SELENIUM_HEADLESS:-true}
+      - SCRAPING_SELENIUM_PROFILE_DIR=${SCRAPING_SELENIUM_PROFILE_DIR-}
+      - SCRAPING_HUMANIZE=${SCRAPING_HUMANIZE:-0}
+      - SCRAPING_HUMANIZE_MIN_WAIT=${SCRAPING_HUMANIZE_MIN_WAIT:-0.5}
+      - SCRAPING_HUMANIZE_MAX_WAIT=${SCRAPING_HUMANIZE_MAX_WAIT:-3.0}
+      - SCRAPING_HUMANIZE_SCROLL_MIN=${SCRAPING_HUMANIZE_SCROLL_MIN:-1}
+      - SCRAPING_HUMANIZE_SCROLL_MAX=${SCRAPING_HUMANIZE_SCROLL_MAX:-5}
+      - SCRAPING_HUMANIZE_SCROLL_WAIT_MIN=${SCRAPING_HUMANIZE_SCROLL_WAIT_MIN:-0.5}
+      - SCRAPING_HUMANIZE_SCROLL_WAIT_MAX=${SCRAPING_HUMANIZE_SCROLL_WAIT_MAX:-1.5}
+      - SCRAPING_POLITE_MODE=${SCRAPING_POLITE_MODE:-0}
+      - SCRAPING_POLITE_MIN_WAIT=${SCRAPING_POLITE_MIN_WAIT:-1.0}
+      - SCRAPING_POLITE_MAX_WAIT=${SCRAPING_POLITE_MAX_WAIT:-5.0}
+      - SCRAPING_POLITE_MAX_RETRIES=${SCRAPING_POLITE_MAX_RETRIES:-5}
+      - SCRAPING_POLITE_BACKOFF_BASE=${SCRAPING_POLITE_BACKOFF_BASE:-2.0}
+      - SCRAPING_POLITE_MAX_ACTIVE_TASKS=${SCRAPING_POLITE_MAX_ACTIVE_TASKS:-1}
+      - HTTP_SEMAPHORE_LIMIT=${HTTP_SEMAPHORE_LIMIT:-1}
+      # Pass database config to DAGs
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-listing_website}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-listing_website_warehouse}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/app/src:ro
+      - ./scripts:/opt/airflow/app/scripts:ro
+      - airflow-logs:/opt/airflow/logs
+      - selenium-profile:/opt/selenium-profile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - listing_website-net
+
+# =============================================================================
+# Volumes - Persistent Data Storage
+# =============================================================================
+volumes:
+  mongo-data:
+    name: listing_website-mongo-data
+  postgres-data:
+    name: listing_website-postgres-data
+  redis-data:
+    name: listing_website-redis-data
+  airflow-logs:
+    name: listing_website-airflow-logs
+  selenium-profile:
+    name: listing_website-selenium-profile
+
+# =============================================================================
+# Networks - Service Communication
+# =============================================================================
+networks:
+  listing_website-net:
+    name: listing_website-network
+    driver: bridge
