@@ -186,3 +186,8 @@ pipeline architecture for review.
 # License
 
 MIT License. See `LICENSE`.
+
+---
+
+# Disclaimer
+This project's code was originally written by me and later reorganized using Codex 5.2, in order to make it tidier and better organized.
