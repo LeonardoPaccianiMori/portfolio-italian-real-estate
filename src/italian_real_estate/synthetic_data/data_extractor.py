@@ -19,6 +19,7 @@ from sqlalchemy import create_engine
 warnings.filterwarnings("ignore", message=".*pandas only supports SQLAlchemy.*")
 
 from ..config.settings import POSTGRES_CONNECTION_PARAMS
+from ..db_urls import get_postgres_connection_string
 from ..config.logging_config import get_logger
 
 # Module-level logger for consistent logging.
@@ -76,15 +77,7 @@ def extract_data_from_postgres(
         f"{' (limited to ' + str(limit) + ' records)' if limit else ''}..."
     )
 
-    # Builds connection string from parameters.
-    conn_string = (
-        f"postgresql+psycopg2://{POSTGRES_CONNECTION_PARAMS['user']}:"
-        f"{POSTGRES_CONNECTION_PARAMS['password']}@"
-        f"{POSTGRES_CONNECTION_PARAMS['host']}:"
-        f"{POSTGRES_CONNECTION_PARAMS['port']}/"
-        f"{POSTGRES_CONNECTION_PARAMS['database']}"
-    )
-    engine = create_engine(conn_string)
+    engine = create_engine(get_postgres_connection_string(**POSTGRES_CONNECTION_PARAMS))
 
     # SQL query to extract data of interest.
     # For listings scraped on multiple dates, only gets earliest occurrence.
@@ -194,15 +187,7 @@ def extract_features_from_postgres(
     """
     logger.info("Extracting features from PostgreSQL...")
 
-    # Builds connection string.
-    conn_string = (
-        f"postgresql+psycopg2://{POSTGRES_CONNECTION_PARAMS['user']}:"
-        f"{POSTGRES_CONNECTION_PARAMS['password']}@"
-        f"{POSTGRES_CONNECTION_PARAMS['host']}:"
-        f"{POSTGRES_CONNECTION_PARAMS['port']}/"
-        f"{POSTGRES_CONNECTION_PARAMS['database']}"
-    )
-    engine = create_engine(conn_string)
+    engine = create_engine(get_postgres_connection_string(**POSTGRES_CONNECTION_PARAMS))
 
     # Base features query.
     features_query = """

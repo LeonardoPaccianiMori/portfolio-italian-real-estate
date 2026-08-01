@@ -79,8 +79,8 @@ italian-real-estate-synthetic = "scripts.generate_synthetic_data:main"
 italian-real-estate-train = "scripts.train_model:main"
 
 [project.urls]
-Homepage = "https://leonardo.pm/projects/1-italian-real-estate/"
-Repository = "https://github.com/LeonardoPaccianiMori/projects-portfolio"
+Homepage = "https://leonardo.pm/projects/italian-real-estate/"
+Repository = "https://github.com/LeonardoPaccianiMori/portfolio-italian-real-estate"
 
 [tool.setuptools]
 packages = [
@@ -112,3 +112,7 @@ target-version = ['py39', 'py310', 'py311']
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

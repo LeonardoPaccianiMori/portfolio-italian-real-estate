@@ -29,7 +29,7 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER:-}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD:-}
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
       - ./docker/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
@@ -51,10 +51,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-listing_website}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DATABASE:-listing_website_warehouse}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql:ro
@@ -75,7 +75,7 @@ services:
     container_name: listing_website-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     networks:
@@ -110,14 +110,14 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-listing_website}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       - POSTGRES_DATABASE=${POSTGRES_DATABASE:-listing_website_warehouse}
       # TensorFlow settings
       - TF_CPP_MIN_LOG_LEVEL=2
       # Airflow API (used by TUI to trigger/monitor DAGs)
       - AIRFLOW_API_BASE_URL=${AIRFLOW_API_BASE_URL:-http://airflow-webserver:8080/api/v1}
       - AIRFLOW_API_USER=${AIRFLOW_API_USER:-admin}
-      - AIRFLOW_API_PASSWORD=${AIRFLOW_API_PASSWORD:-admin}
+      - AIRFLOW_API_PASSWORD=${AIRFLOW_API_PASSWORD:?Set AIRFLOW_API_PASSWORD in .env}
       # Scraping (Selenium)
       - SCRAPING_USE_SELENIUM=${SCRAPING_USE_SELENIUM:-0}
       - SCRAPING_SELENIUM_HEADLESS=${SCRAPING_SELENIUM_HEADLESS:-true}
@@ -136,8 +136,6 @@ services:
       - SCRAPING_POLITE_BACKOFF_BASE=${SCRAPING_POLITE_BACKOFF_BASE:-2.0}
       - SCRAPING_POOL_NAME=${SCRAPING_POOL_NAME:-scrape_pool}
       - SCRAPING_POOL_SLOTS=${SCRAPING_POOL_SLOTS:-1}
-      - SCRAPING_POLITE_MAX_ACTIVE_TASKS=${SCRAPING_POLITE_MAX_ACTIVE_TASKS:-1}
-      - HTTP_SEMAPHORE_LIMIT=${HTTP_SEMAPHORE_LIMIT:-1}
       - SCRAPING_POLITE_MAX_ACTIVE_TASKS=${SCRAPING_POLITE_MAX_ACTIVE_TASKS:-1}
       - HTTP_SEMAPHORE_LIMIT=${HTTP_SEMAPHORE_LIMIT:-1}
     volumes:
@@ -164,14 +162,14 @@ services:
     container_name: listing_website-airflow-db-init
     restart: "no"
     environment:
-      - PGPASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - PGPASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     entrypoint: /bin/bash
     command:
       - -c
       - |
         psql -h postgres -U ${POSTGRES_USER:-listing_website} -d postgres \
           -v airflow_user="${AIRFLOW_DB_USER:-airflow}" \
-          -v airflow_password="${AIRFLOW_DB_PASSWORD:-airflow}" \
+          -v airflow_password="${AIRFLOW_DB_PASSWORD:?Set AIRFLOW_DB_PASSWORD in .env}" \
           -v airflow_db="${AIRFLOW_DB_NAME:-airflow}" <<'SQL'
         \set ON_ERROR_STOP on
         SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'airflow_user', :'airflow_password')
@@ -204,7 +202,7 @@ services:
         airflow db init
         airflow users create \
           --username ${AIRFLOW_ADMIN_USER:-admin} \
-          --password ${AIRFLOW_ADMIN_PASSWORD:-admin} \
+          --password ${AIRFLOW_ADMIN_PASSWORD:?Set AIRFLOW_ADMIN_PASSWORD in .env} \
           --firstname ${AIRFLOW_ADMIN_FIRSTNAME:-Admin} \
           --lastname ${AIRFLOW_ADMIN_LASTNAME:-User} \
           --role Admin \
@@ -215,9 +213,9 @@ services:
           "Scraping pool (rate limiting)" || true
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
-      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:-}
-      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:-your-secret-key}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:?Set AIRFLOW_DB_PASSWORD in .env}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:?Set AIRFLOW__CORE__FERNET_KEY in .env}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:?Set AIRFLOW__WEBSERVER__SECRET_KEY in .env}
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - SCRAPING_POOL_NAME=${SCRAPING_POOL_NAME:-scrape_pool}
       - SCRAPING_POOL_SLOTS=${SCRAPING_POOL_SLOTS:-1}
@@ -240,12 +238,12 @@ services:
     restart: unless-stopped
     command: webserver
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
-      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:-}
-      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:-your-secret-key}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:?Set AIRFLOW_DB_PASSWORD in .env}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:?Set AIRFLOW__CORE__FERNET_KEY in .env}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:?Set AIRFLOW__WEBSERVER__SECRET_KEY in .env}
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
       - CHROME_BIN=/usr/bin/chromium
@@ -273,7 +271,7 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-listing_website}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       - POSTGRES_DATABASE=${POSTGRES_DATABASE:-listing_website_warehouse}
     volumes:
       - ./dags:/opt/airflow/dags
@@ -307,9 +305,9 @@ services:
     command: scheduler
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
-      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:-}
-      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:-your-secret-key}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:?Set AIRFLOW_DB_PASSWORD in .env}@postgres:5432/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY:?Set AIRFLOW__CORE__FERNET_KEY in .env}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY:?Set AIRFLOW__WEBSERVER__SECRET_KEY in .env}
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
       - CHROME_BIN=/usr/bin/chromium
@@ -337,7 +335,7 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-listing_website}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       - POSTGRES_DATABASE=${POSTGRES_DATABASE:-listing_website_warehouse}
     volumes:
       - ./dags:/opt/airflow/dags

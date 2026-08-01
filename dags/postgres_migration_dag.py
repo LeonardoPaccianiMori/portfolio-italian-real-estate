@@ -10,8 +10,7 @@ Description:
     independent tasks that can be executed in parallel.
 
 License:
-    This code is released under the GNU General Public License v3.
-    See https://www.gnu.org/licenses/gpl-3.0.en.html for details.
+    MIT. See the repository LICENSE file.
 """
 
 # -------------------------------------------------------------------------------

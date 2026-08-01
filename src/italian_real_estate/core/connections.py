@@ -35,6 +35,8 @@ from typing import Tuple, Optional, Any
 import pymongo
 from pymongo import MongoClient
 
+from italian_real_estate.db_urls import get_postgres_connection_string
+
 from italian_real_estate.config.settings import (
     MONGODB_HOST,
     MONGODB_PORT,
@@ -311,46 +313,6 @@ def get_collection_for_listing_type(
 # =============================================================================
 # POSTGRESQL CONNECTION UTILITIES
 # =============================================================================
-
-def get_postgres_connection_string(
-    host: str = POSTGRES_HOST,
-    port: str = POSTGRES_PORT,
-    user: str = POSTGRES_USER,
-    password: str = POSTGRES_PASSWORD,
-    database: str = POSTGRES_DATABASE
-) -> str:
-    """
-    Build a PostgreSQL connection string for SQLAlchemy.
-
-    This function constructs a properly formatted connection string that can
-    be used with SQLAlchemy's create_engine() function. The string uses the
-    psycopg2 driver for PostgreSQL connectivity.
-
-    Args:
-        host: The hostname or IP address of the PostgreSQL server.
-        port: The port number of the PostgreSQL server (as string).
-        user: The username for authentication.
-        password: The password for authentication.
-        database: The name of the database to connect to.
-
-    Returns:
-        str: A SQLAlchemy-compatible connection string in the format:
-            postgresql+psycopg2://user:password@host:port/database
-
-    Example:
-        >>> from sqlalchemy import create_engine
-        >>> conn_string = get_postgres_connection_string()
-        >>> engine = create_engine(conn_string)
-        >>> with engine.connect() as conn:
-        ...     result = conn.execute("SELECT 1")
-    """
-    # Build the connection string using SQLAlchemy's URL format.
-    # psycopg2 is the standard PostgreSQL adapter for Python.
-    connection_string = (
-        f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
-    )
-    return connection_string
-
 
 def get_postgres_db_params() -> dict:
     """

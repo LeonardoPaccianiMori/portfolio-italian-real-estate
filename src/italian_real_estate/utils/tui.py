@@ -494,10 +494,14 @@ class PipelineTUI:
         return base.rstrip("/")
 
     def _get_airflow_api_auth(self) -> Tuple[str, str]:
-        return (
-            os.getenv("AIRFLOW_API_USER", "admin"),
-            os.getenv("AIRFLOW_API_PASSWORD", "admin"),
-        )
+        username = os.getenv("AIRFLOW_API_USER", "").strip()
+        password = os.getenv("AIRFLOW_API_PASSWORD", "")
+        if not username or not password:
+            raise RuntimeError(
+                "Set AIRFLOW_API_USER and AIRFLOW_API_PASSWORD before using "
+                "Airflow orchestration."
+            )
+        return username, password
 
     def _airflow_request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{self._get_airflow_api_base_url()}{path}"

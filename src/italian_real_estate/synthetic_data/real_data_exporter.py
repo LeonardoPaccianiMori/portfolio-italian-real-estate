@@ -15,6 +15,7 @@ from typing import Dict, Optional
 import pandas as pd
 
 from ..config.settings import POSTGRES_CONNECTION_PARAMS
+from ..db_urls import get_postgres_connection_string
 from ..config.logging_config import get_logger
 from .data_extractor import (
     extract_data_from_postgres,
@@ -66,15 +67,7 @@ def get_listing_counts() -> Dict[str, int]:
 
     logger.info("Querying PostgreSQL for listing counts by type...")
 
-    # Build connection string
-    conn_string = (
-        f"postgresql+psycopg2://{POSTGRES_CONNECTION_PARAMS['user']}:"
-        f"{POSTGRES_CONNECTION_PARAMS['password']}@"
-        f"{POSTGRES_CONNECTION_PARAMS['host']}:"
-        f"{POSTGRES_CONNECTION_PARAMS['port']}/"
-        f"{POSTGRES_CONNECTION_PARAMS['database']}"
-    )
-    engine = create_engine(conn_string)
+    engine = create_engine(get_postgres_connection_string(**POSTGRES_CONNECTION_PARAMS))
 
     # Query to count unique listings by type (using earliest date per listing)
     query = """

@@ -32,25 +32,28 @@ logger = get_logger(__name__)
 
 def evaluate_model(
     Y_test: pd.Series,
-    Y_pred: np.ndarray
+    Y_pred: np.ndarray,
+    log_transformed_target: bool = True,
 ) -> Dict[str, float]:
     """
     Calculate regression evaluation metrics.
 
-    This function computes standard regression metrics comparing
-    actual and predicted values. Metrics are computed on log-transformed
-    values if the model was trained with log transformation.
+    RMSE, MAE, and R-squared are computed on the supplied model-target scale.
+    MAPE is computed on the original target scale by reversing `log1p` when
+    `log_transformed_target` is true.
 
     Args:
         Y_test: Actual target values (log-transformed if model uses log).
         Y_pred: Predicted target values (same scale as Y_test).
+        log_transformed_target: Whether to reverse `log1p` before MAPE.
 
     Returns:
         Dictionary containing:
         - rmse: Root Mean Squared Error
         - mae: Mean Absolute Error
-        - mape: Mean Absolute Percentage Error (as decimal)
-        - r2: R-squared (coefficient of determination)
+        - mape: Mean Absolute Percentage Error on the original target scale
+          (as a decimal)
+        - r2: R-squared on the supplied model-target scale
 
     Example:
         >>> Y_pred = model.predict(X_test)
@@ -62,7 +65,13 @@ def evaluate_model(
     mse = mean_squared_error(Y_test, Y_pred)
     rmse = np.sqrt(mse)
     mae = mean_absolute_error(Y_test, Y_pred)
-    mape = mean_absolute_percentage_error(Y_test, Y_pred)
+    if log_transformed_target:
+        mape_actual = np.expm1(np.asarray(Y_test))
+        mape_predicted = np.expm1(np.asarray(Y_pred))
+    else:
+        mape_actual = Y_test
+        mape_predicted = Y_pred
+    mape = mean_absolute_percentage_error(mape_actual, mape_predicted)
     r2 = r2_score(Y_test, Y_pred)
 
     metrics = {
@@ -75,7 +84,7 @@ def evaluate_model(
     # Logs the results.
     logger.info(f"RMSE: {rmse:.4f}")
     logger.info(f"MAE: {mae:.4f}")
-    logger.info(f"MAPE: {mape*100:.2f}%")
+    logger.info(f"MAPE (original target scale): {mape*100:.2f}%")
     logger.info(f"R2: {r2:.4f}")
 
     return metrics
@@ -93,11 +102,11 @@ def print_metrics(metrics: Dict[str, float]) -> None:
         >>> print_metrics(metrics)
         RMSE: 0.25
         MAE: 0.14
-        MAPE: 2.07%
+        MAPE (original target scale): 10.00%
     """
     print(f"RMSE: {metrics['rmse']:.2f}")
     print(f"MAE: {metrics['mae']:.2f}")
-    print(f"MAPE: {metrics['mape']*100:.2f}%")
+    print(f"MAPE (original target scale): {metrics['mape']*100:.2f}%")
     print(f"R2: {metrics['r2']:.4f}")
 
 

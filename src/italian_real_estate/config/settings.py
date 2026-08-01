@@ -13,8 +13,8 @@ Configuration includes:
     - Airflow DAG default arguments
 
 Note:
-    Some values are hardcoded as per the original implementation.
-    Modify these values according to your environment.
+    Runtime credentials must be provided through environment variables. Empty
+    defaults are retained only for optional unauthenticated local services.
 
 Author: Leonardo Pacciani-Mori
 License: MIT
@@ -70,8 +70,8 @@ COLLECTION_NAMES = ["sale", "rent", "auction"]
 # Use POSTGRES_HOST=postgres for Docker, or localhost for local development.
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "lpm")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "LeonardoPostgreSQL")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE", "listing_website_warehouse")
 
 # Consolidated connection parameters dictionary for psycopg2.
